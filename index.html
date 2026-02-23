@@ -88,6 +88,41 @@ header {
 }
 
 /* ──────────────────────────────────────────
+   UPLOAD ZONE
+────────────────────────────────────────── */
+.upload-section {
+  background: var(--bg-card);
+  border: 2px dashed rgba(0,200,255,0.22);
+  border-radius: var(--radius);
+  padding: 22px 28px;
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  margin-bottom: 20px; cursor: pointer;
+  transition: border-color .25s, background .25s;
+}
+.upload-section:hover, .upload-section.drag-over {
+  border-color: var(--accent);
+  background: rgba(0,200,255,0.04);
+}
+.upload-icon {
+  width: 46px; height: 46px; flex-shrink: 0;
+  background: rgba(0,200,255,0.09); border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.upload-icon svg { width: 22px; height: 22px; color: var(--accent); fill: none; stroke: currentColor; stroke-width: 2; }
+.upload-text h3 { font-size: 0.92rem; font-weight: 600; margin-bottom: 3px; }
+.upload-text p  { font-size: 0.78rem; color: var(--text-mid); }
+.btn-upload {
+  margin-left: auto;
+  background: linear-gradient(135deg, var(--accent) 0%, #0096c7 100%);
+  color: #050d1a; border: none; border-radius: 10px;
+  padding: 10px 24px; font-family: var(--font-b);
+  font-weight: 700; font-size: 0.86rem; cursor: pointer;
+  white-space: nowrap; transition: opacity .2s, transform .15s;
+}
+.btn-upload:hover { opacity: 0.85; transform: translateY(-1px); }
+#file-input { display: none; }
+
+/* ──────────────────────────────────────────
    FILTERS BAR
 ────────────────────────────────────────── */
 .filters-bar {
@@ -287,6 +322,8 @@ tbody td:first-child { color: var(--accent); font-weight: 500; }
 
 @media (max-width: 640px) {
   header { padding: 22px 0 18px; }
+  .upload-section { padding: 16px; }
+  .btn-upload { margin-left: 0; width: 100%; text-align: center; }
   .cards-grid { grid-template-columns: 1fr 1fr; }
   .search-wrap input { width: 160px; }
 }
@@ -317,6 +354,19 @@ tbody td:first-child { color: var(--accent); font-weight: 500; }
       <span class="badge" id="data-source-badge" style="border-color:rgba(255,209,102,0.22);color:var(--warn);background:rgba(255,209,102,0.08)">⏳ กำลังโหลด...</span>
     </div>
   </header>
+
+  <!-- ══════════════════════════ UPLOAD CSV ══════════════════════════ -->
+  <div class="upload-section" id="upload-zone">
+    <div class="upload-icon">
+      <svg viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+    </div>
+    <div class="upload-text">
+      <h3>อัปโหลดไฟล์ CSV ของคุณ</h3>
+      <p>ลากวางไฟล์ที่นี่ หรือคลิกเพื่อเลือกไฟล์ · รองรับ .csv เท่านั้น</p>
+    </div>
+    <button class="btn-upload" id="btn-upload-trigger">📂 เลือกไฟล์ CSV</button>
+    <input type="file" id="file-input" accept=".csv">
+  </div>
 
   <!-- ══════════════════════════ FILTERS ══════════════════════════ -->
   <div class="filters-bar">
@@ -510,17 +560,61 @@ const COL = {
 };
 
 /* ============================================================
-   INIT — ดึง CSV จากเซิร์ฟเวอร์ (same directory)
+   INIT — ลอง fetch CSV จากโฟลเดอร์เดียวกันก่อน
+          ถ้าไม่ได้ให้ผู้ใช้อัปโหลดเองผ่าน UI
    ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
   initFilters();
   initTableSearch();
+  initUpload();
   document.getElementById('btn-reset').addEventListener('click', resetFilters);
   loadCSV();
 });
 
 /* ============================================================
-   LOAD CSV ผ่าน fetch() จากไฟล์เดียวกัน
+   UPLOAD — รองรับ click และ drag & drop
+   ============================================================ */
+function initUpload() {
+  const zone   = document.getElementById('upload-zone');
+  const input  = document.getElementById('file-input');
+  const btnTrg = document.getElementById('btn-upload-trigger');
+
+  btnTrg.addEventListener('click', e => { e.stopPropagation(); input.click(); });
+  zone.addEventListener('click', () => input.click());
+
+  input.addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (f) readFile(f);
+    input.value = '';
+  });
+
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f && f.name.endsWith('.csv')) readFile(f);
+    else alert('กรุณาเลือกไฟล์ .csv เท่านั้น');
+  });
+}
+
+function readFile(file) {
+  document.getElementById('loading').style.display = 'flex';
+  const reader = new FileReader();
+  reader.onload  = e => {
+    parseAndLoad(e.target.result, file.name);
+    document.getElementById('loading').style.display = 'none';
+  };
+  reader.onerror = () => {
+    alert('อ่านไฟล์ไม่สำเร็จ');
+    document.getElementById('loading').style.display = 'none';
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+/* ============================================================
+   LOAD CSV ผ่าน fetch() — โหลดอัตโนมัติเมื่ออยู่บน server
+   ถ้าล้มเหลว (เปิดจาก file://) → แสดงคำแนะนำให้อัปโหลด
    ============================================================ */
 function loadCSV() {
   const badge = document.getElementById('data-source-badge');
@@ -532,27 +626,27 @@ function loadCSV() {
       return res.text();
     })
     .then(csvText => {
-      parseAndLoad(csvText);
+      parseAndLoad(csvText, CSV_FILE);
       document.getElementById('loading').style.display = 'none';
     })
-    .catch(err => {
+    .catch(() => {
+      // เปิดจาก file:// หรือหาไฟล์ไม่เจอ → ให้ผู้ใช้อัปโหลดเอง
       document.getElementById('loading').style.display = 'none';
-      badge.textContent = '❌ โหลดไฟล์ไม่สำเร็จ';
-      badge.style.color = 'var(--danger)';
-      badge.style.borderColor = 'rgba(255,107,107,0.3)';
-      badge.style.background  = 'rgba(255,107,107,0.08)';
-      console.error('ไม่สามารถโหลดไฟล์ CSV ได้:', err);
+      badge.textContent = '📂 กรุณาอัปโหลด CSV';
+      badge.style.color       = 'var(--warn)';
+      badge.style.borderColor = 'rgba(255,209,102,0.3)';
+      badge.style.background  = 'rgba(255,209,102,0.08)';
     });
 }
 
 /* ============================================================
    PARSE CSV ด้วย PapaParse → เก็บใน allData
    ============================================================ */
-function parseAndLoad(csvText) {
+function parseAndLoad(csvText, sourceName) {
   const result = Papa.parse(csvText.trim(), {
     header:          true,
     skipEmptyLines:  true,
-    dynamicTyping:   true,   // แปลงตัวเลขอัตโนมัติ
+    dynamicTyping:   true,
     transformHeader: h => h.trim(),
   });
 
@@ -565,6 +659,10 @@ function parseAndLoad(csvText) {
   badge.style.color        = 'var(--accent2)';
   badge.style.borderColor  = 'rgba(0,255,200,0.22)';
   badge.style.background   = 'rgba(0,255,200,0.08)';
+
+  // อัปเดต upload zone บอกชื่อไฟล์ที่โหลด
+  const uploadText = document.querySelector('.upload-text p');
+  if (uploadText) uploadText.textContent = `✅ โหลดแล้ว: ${sourceName} — ${allData.length.toLocaleString()} รายการ, ${columns.length} คอลัมน์`;
 
   populateFilterOptions();
   filteredData = [...allData];
